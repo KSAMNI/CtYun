@@ -1,0 +1,59 @@
+# 天翼云电脑保活 (CtYun) - Docker Compose 部署
+#
+# 快速开始：
+#   1) 准备配置目录并放入账号配置：
+#        mkdir -p ctyun-data
+#        # 将 accounts.json 放到 ./ctyun-data/accounts.json
+#
+#   2) 首次绑定设备（需要输入短信验证码，必须交互式运行）：
+#        docker compose run --rm ctyun
+#      看到「保活任务启动」后按 Ctrl+C 退出。
+#      （此时绑定信息已写入 ctyun-data/devices/，之后无需再次绑定）
+#
+#   3) 后台常驻运行：
+#        docker compose up -d
+#
+#   4) 查看日志：
+#        docker compose logs -f
+#
+# 说明：
+#   * 直接执行 `docker compose up -d` 而尚未绑定设备也是安全的：
+#     程序检测到非交互环境会跳过短信发送，并低频重试，不会产生重复短信。
+#   * 升级镜像：docker compose pull && docker compose up -d
+
+services:
+  ctyun:
+    image: ghcr.io/ksamni/ctyun:latest
+    container_name: ctyun
+
+    # 异常退出或宿主机重启后自动拉起；手动 stop 不会被自动重启
+    restart: unless-stopped
+
+    # 让 PID 1 正确转发 SIGTERM 并回收僵尸进程，`docker compose stop` 时能优雅退出
+    init: true
+
+    # 保留标准输入，供 `docker compose run --rm ctyun` 交互输入短信验证码使用
+    stdin_open: true
+
+    environment:
+      # 容器内使用东八区时间，保证日志时间戳与本地一致（基础镜像已内置 tzdata）
+      TZ: Asia/Shanghai
+      # 可选：覆盖 accounts.json 中的会话轮换周期（分钟，0 = 关闭轮换）
+      # 取消注释后此项优先于 accounts.json 的 restartIntervalMinutes
+      # CTYUN_RESTART_INTERVAL_MINUTES: "30"
+
+    volumes:
+      # 必须持久化：账号配置、设备码（devices/）都在这里，
+      # 丢失设备码会导致需要重新走一次短信绑定
+      - ./ctyun-data:/app/data
+
+    # 限制日志体积，避免长期运行时占满磁盘
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # 安全加固：禁止容器内进程提权
+    security_opt:
+      - no-new-privileges:true

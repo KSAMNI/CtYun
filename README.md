@@ -113,6 +113,61 @@ docker run -d \
 ```bash
 docker logs -f ctyun
 ```
+## 推荐：使用 docker compose 部署
+
+仓库根目录提供了 `docker-compose.yml`，适合长期在服务器上运行。首次绑定设备：
+
+```bash
+mkdir -p ctyun-data
+# 把 accounts.json 放入 ./ctyun-data/accounts.json
+docker compose run --rm ctyun    # 交互式输入短信验证码，看到"保活任务启动"后 Ctrl+C
+```
+
+确认绑定成功后改为后台常驻：
+
+```bash
+docker compose up -d
+docker compose logs -f
+```
+
+升级镜像：
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+compose 文件已包含的配置：
+
+| 配置 | 作用 |
+| --- | --- |
+| `restart: unless-stopped` | 异常退出或宿主机重启后自动拉起；也覆盖了意外崩溃的场景 |
+| `init: true` | 让 PID 1 正确转发 SIGTERM，`docker compose stop` 可优雅退出 |
+| `stdin_open: true` | 供首次绑定交互输入短信验证码 |
+| `TZ=Asia/Shanghai` | 容器内日志时间戳与本地一致（基础镜像已内置 tzdata） |
+| `logging` | 日志滚动（10MB × 3），避免长期运行占满磁盘 |
+| `security_opt` | `no-new-privileges`，禁止容器内进程提权 |
+| `volumes` | 持久化 `/app/data`（含 `accounts.json` 与 `devices/` 设备码） |
+
+> 注意：`docker compose run --rm ctyun` 会临时清空 `restart` 策略，因此首次绑定不会陷入重启循环。
+> 未完成绑定直接 `docker compose up -d` 也是安全的：程序在非交互环境会跳过短信发送并低频重试，不会重复发短信。
+
+## Docker 后台运行（不用 compose）
+
+设备绑定完成后使用：
+
+```bash
+docker run -d \
+  --name ctyun \
+  --restart unless-stopped \
+  -v "$(pwd)/ctyun-data:/app/data" \
+  ghcr.io/ksamni/ctyun:latest
+```
+
+查看日志：
+
+```bash
+docker logs -f ctyun
+```
 
 ## 兼容旧环境变量模式
 
