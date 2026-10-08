@@ -97,13 +97,23 @@ docker run -it --rm \
 
 看到保活任务启动后，说明设备码已经绑定成功。之后可以按 `Ctrl+C` 停止初始化容器，再改为后台运行。
 
-## Docker 后台运行
+## Docker 运行（不使用 compose）
 
-设备绑定完成后使用：
+如果不想用 compose，也可以直接用 `docker run`。首次绑定设备：
+
+```bash
+docker run -it --rm \
+  --name ctyun-init \
+  -v "$(pwd)/ctyun-data:/app/data" \
+  ghcr.io/ksamni/ctyun:latest
+```
+
+看到保活任务启动后，说明设备码已经绑定成功，按 `Ctrl+C` 停止。之后改为后台常驻运行：
 
 ```bash
 docker run -d \
   --name ctyun \
+  --restart unless-stopped \
   -v "$(pwd)/ctyun-data:/app/data" \
   ghcr.io/ksamni/ctyun:latest
 ```
@@ -150,24 +160,6 @@ compose 文件已包含的配置：
 
 > 注意：`docker compose run --rm ctyun` 会临时清空 `restart` 策略，因此首次绑定不会陷入重启循环。
 > 未完成绑定直接 `docker compose up -d` 也是安全的：程序在非交互环境会跳过短信发送并低频重试，不会重复发短信。
-
-## Docker 后台运行（不用 compose）
-
-设备绑定完成后使用：
-
-```bash
-docker run -d \
-  --name ctyun \
-  --restart unless-stopped \
-  -v "$(pwd)/ctyun-data:/app/data" \
-  ghcr.io/ksamni/ctyun:latest
-```
-
-查看日志：
-
-```bash
-docker logs -f ctyun
-```
 
 ## 兼容旧环境变量模式
 
