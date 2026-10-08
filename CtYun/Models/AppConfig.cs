@@ -11,6 +11,17 @@ namespace CtYun.Models
         [JsonPropertyName("keepAliveSeconds")]
         public int KeepAliveSeconds { get; set; } = 60;
 
+        /// <summary>会话轮换周期（分钟）。0 表示关闭轮换，行为与旧版本一致。</summary>
+        [JsonPropertyName("restartIntervalMinutes")]
+        public int RestartIntervalMinutes { get; set; } = 30;
+
+        /// <summary>每次会话时长附加的随机抖动（秒），用于错峰，避免多账号同时重新登录。</summary>
+        [JsonPropertyName("restartJitterSeconds")]
+        public int RestartJitterSeconds { get; set; } = 60;
+
+        /// <summary>会话之间的冷却时间（秒），给服务端释放旧会话的时间。</summary>
+        [JsonPropertyName("sessionCooldownSeconds")]
+        public int SessionCooldownSeconds { get; set; } = 10;
     }
 
     public class AccountConfig

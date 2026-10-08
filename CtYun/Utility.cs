@@ -8,10 +8,16 @@ namespace CtYun
 {
     internal class Utility
     {
+        private static readonly object SyncRoot = new();
+
         public static void WriteLine(ConsoleColor consolecolor, object value)
         {
-            Console.ForegroundColor = consolecolor;
-            Console.WriteLine(Time() + value);
+            // 多账号/多台云电脑并发输出时避免控制台颜色串台
+            lock (SyncRoot)
+            {
+                Console.ForegroundColor = consolecolor;
+                Console.WriteLine(Time() + value);
+            }
         }
         private static string Time()
         {

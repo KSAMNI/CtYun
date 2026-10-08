@@ -6,8 +6,8 @@
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>disable</Nullable>
 		<PublishAot>true</PublishAot>
-		<FileVersion>1.1.5</FileVersion>
-		<AssemblyVersion>1.1.5</AssemblyVersion>
+		<FileVersion>1.2.0</FileVersion>
+		<AssemblyVersion>1.2.0</AssemblyVersion>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 	</PropertyGroup>
 

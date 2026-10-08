@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace CtYun
 {
-    internal class CtYunApi
+    internal class CtYunApi : IDisposable
     {
 
         private const string orcUrl = "https://orc.1999111.xyz/ocr";
@@ -24,6 +24,9 @@ namespace CtYun
         private string _deviceCode;
 
         private readonly HttpClient client;
+        private bool _disposed;
+        /// <summary>上次登录是否因账号或密码错误被服务端明确拒绝。此类失败重试无意义，应等待人工处理。</summary>
+        public bool CredentialsRejected { get; private set; }
 
         public LoginInfo LoginInfo { get; set; }
         public CtYunApi(string deviceCode)
@@ -75,6 +78,7 @@ namespace CtYun
                 Utility.WriteLine(ConsoleColor.Red, $"重试{i}, Login Error:{result.Msg}");
                 if (result.Msg == "用户名或密码错误")
                 {
+                    CredentialsRejected = true;
                     return false;
                 }
             }
@@ -292,6 +296,18 @@ namespace CtYun
             using SHA256 sha256 = SHA256.Create();
             byte[] hash = sha256.ComputeHash(bytes);
             return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+        }
+
+        /// <summary>释放 HttpClient。会话轮换会周期性重建实例，及时释放可避免句柄累积。</summary>
+        public void Dispose()
+        {
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            client.Dispose();
         }
 
     }

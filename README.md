@@ -21,6 +21,9 @@ CtYun 用于登录天翼云电脑并维持 WebSocket 保活连接。当前版本
 ```json
 {
   "keepAliveSeconds": 60,
+  "restartIntervalMinutes": 30,
+  "restartJitterSeconds": 60,
+  "sessionCooldownSeconds": 10,
   "accounts": [
     {
       "name": "account-a",
@@ -36,6 +39,18 @@ CtYun 用于登录天翼云电脑并维持 WebSocket 保活连接。当前版本
   ]
 }
 ```
+
+字段说明：
+
+| 字段 | 默认值 | 说明 |
+| --- | --- | --- |
+| `keepAliveSeconds` | 60 | 单个 WebSocket 保活周期的长度，到期强制重连。 |
+| `restartIntervalMinutes` | 30 | **定时重启保活任务的周期**。到期后重新登录、重新获取连接票据并重建保活会话。设为 `0` 关闭轮换（等同旧版本行为）。 |
+| `restartJitterSeconds` | 60 | 会话时长的随机抖动上限，用于多账号错峰，避免同时重新登录。 |
+| `sessionCooldownSeconds` | 10 | 两段会话之间的冷却时间，给服务端释放旧会话的时间。 |
+| `accounts[].deviceCode` | 自动生成 | 设备码，留空时自动生成并保存到 `devices/{账号名}.txt`。 |
+
+也可以用环境变量 `CTYUN_RESTART_INTERVAL_MINUTES` 覆盖 `restartIntervalMinutes`，便于在不改配置文件的情况下调整轮换周期。
 
 `deviceCode` 可不填。程序会为每个账号自动生成设备码，并保存到 `devices/{账号名}.txt`。为了避免每次 Docker 重建镜像后重新绑定设备，务必持久化数据目录。
 
@@ -77,7 +92,7 @@ mkdir -p ./ctyun-data
 docker run -it --rm \
   --name ctyun-init \
   -v "$(pwd)/ctyun-data:/app/data" \
-  su3817807/ctyun:latest
+  ghcr.io/ksamni/ctyun:latest
 ```
 
 看到保活任务启动后，说明设备码已经绑定成功。之后可以按 `Ctrl+C` 停止初始化容器，再改为后台运行。
@@ -90,7 +105,7 @@ docker run -it --rm \
 docker run -d \
   --name ctyun \
   -v "$(pwd)/ctyun-data:/app/data" \
-  su3817807/ctyun:latest
+  ghcr.io/ksamni/ctyun:latest
 ```
 
 查看日志：
@@ -110,7 +125,7 @@ docker run -it --rm \
   -e APP_USER="你的账号" \
   -e APP_PASSWORD="你的密码" \
   -e DEVICECODE="web_你的设备码" \
-  su3817807/ctyun:latest
+  ghcr.io/ksamni/ctyun:latest
 ```
 
 绑定完成后改为后台运行：
@@ -122,19 +137,36 @@ docker run -d \
   -e APP_USER="你的账号" \
   -e APP_PASSWORD="你的密码" \
   -e DEVICECODE="web_你的设备码" \
-  su3817807/ctyun:latest
+  ghcr.io/ksamni/ctyun:latest
 ```
 
 建议新部署优先使用 `accounts.json`，多账号管理更清晰，也更适合 Docker 持久化。
 
 ## 日志与保活
 
-程序会为每个账号、每台云电脑启动独立保活任务。日志格式会带上账号名和云电脑编号，便于区分：
+程序会为每个账号建立**长驻账号任务**，并周期性地重建"会话"：重新登录 → 重新获取云电脑列表 → 重新 connect 取连接票据 → 重建保活任务。日志格式会带上账号名和云电脑编号，便于区分：
 
 ```text
+[account-a] 开始登录（第 2 段会话）。
+[account-a][desktop-code] === 新周期开始，尝试连接 ===
 [account-a][desktop-code] -> 收到保活校验
 [account-a][desktop-code] -> 发送保活响应成功
+[account-a] === 第 1 段会话运行 30.2 分钟，定时重建登录与保活会话 ===
 ```
+
+### 为什么需要定时重建会话
+
+云电脑的连接票据（`clinkLvsOutHost` 与配套证书、token）存在有效期。旧版本只在进程启动时获取一次票据，长时间运行后票据过期，服务端会在 WebSocket 刚刚就绪时立即断开，表现为每几秒重复出现：
+
+```text
+=== 新周期开始，尝试连接 ===
+连接已就绪，保持 60 秒...
+异常: The remote party closed the WebSocket connection without completing the close handshake.
+```
+
+由于纯 WebSocket 重连并不会刷新票据，这个循环无法自愈，必须重启进程（或容器）才能恢复。现在程序会按 `restartIntervalMinutes` 主动重建会话，在票据过期前换新票据；如果仍然检测到"就绪后立刻被断开"或"连续建连失败"，会立即重建整段会话，并按指数退避重试，不会高频空转。
+
+建议把 `restartIntervalMinutes` 设为实测票据有效期的 1/2 ~ 1/3，且不小于两个 `keepAliveSeconds` 周期（程序会自动兜底该下限）。
 
 ## 说明
 
